@@ -1,114 +1,184 @@
-# FamilySearch MCP Server
+# FamilySearch MCP Secure
 
-This is a Model Context Protocol (MCP) server for FamilySearch APIs. It allows AI tools like Claude or Cursor to interact with FamilySearch's family history data directly.
+A local, read-only Model Context Protocol server for FamilySearch genealogy
+research.
 
-## Features
+This fork replaces the original password-based authentication with FamilySearch's
+current OAuth 2.0 Authorization Code flow and PKCE. The server never accepts,
+handles, or stores a FamilySearch username or password.
 
-- Authentication with FamilySearch credentials
-- Search for person records in FamilySearch Family Tree
-- View detailed person information
-- Explore ancestors and descendants
-- Search historical records
+## Security properties
 
-## Prerequisites
+- Browser-based FamilySearch login with OAuth Authorization Code and PKCE
+- Random `state` value validated with a timing-safe comparison
+- Loopback-only callback listener with a five-minute timeout
+- Access token held in process memory only
+- No refresh-token persistence
+- On-disk config contains only the app key, redirect URI, and environment
+- Read-only FamilySearch API methods
+- Living people redacted by default
+- Bounded inputs and result counts
+- Control-character removal and an untrusted-data notice on API results
+- Dependencies pinned exactly in `package-lock.json`
 
-- Node.js 16+ and npm
-- A FamilySearch developer account and API credentials
-- A FamilySearch user account with access to Family Tree data
+See [SECURITY.md](SECURITY.md) for the threat model and remaining limitations.
 
-## Installation
+## Requirements
 
-1. Clone this repository
-2. Install dependencies:
+- Node.js 20 or later
+- A FamilySearch developer app key
+- A FamilySearch-approved OAuth callback URI
+- A local MCP client that supports stdio servers
 
-```bash
-npm install
+Do not deploy this server to a hosted MCP provider. Its loopback callback and
+in-memory token model are intentionally designed for local use.
+
+## FamilySearch application setup
+
+1. Apply for FamilySearch API access through the
+   [FamilySearch Developer Portal](https://developers.familysearch.org/).
+2. Register this exact callback URI for your app key:
+
+   ```text
+   http://127.0.0.1:57938/familysearch-auth
+   ```
+
+3. Start with the `beta` environment. FamilySearch manages beta and production
+   app keys separately; production access may require approval.
+4. Keep the app key available. It identifies the application but is not a user
+   password or OAuth access token.
+
+FamilySearch requires callback URIs to be pre-registered. If port `57938` is
+unavailable, choose another high port and register that exact URI before using
+it.
+
+## Install and build
+
+```powershell
+git clone https://github.com/YOUR-ACCOUNT/familysearch-mcp.git
+Set-Location familysearch-mcp
+npm ci
+npm run check
 ```
 
-3. Build the project:
+Start the server with:
 
-```bash
-npm run build
-```
-
-## FamilySearch API Setup
-
-Before using this tool, you'll need to register for FamilySearch API access:
-
-1. Go to [FamilySearch Developers](https://www.familysearch.org/developers/)
-2. Sign in with your FamilySearch account
-3. Create a new application
-4. Set the redirect URI to `https://localhost:8080/oauth-redirect` (you can change this later)
-5. Copy your Client ID - you'll need it for configuration
-
-## Usage
-
-Run the server:
-
-```bash
+```powershell
 npm start
 ```
 
-Then, in your AI tool that supports MCP (like Claude or Cursor), you can use the FamilySearch tools to interact with family history data.
+For an MCP client, configure a local stdio server whose command is `node` and
+whose single argument is the absolute path to `build/index.js`. For example:
 
-## Configuration
-
-The first time you use the MCP, you'll need to configure it with your FamilySearch API credentials:
-
-```
-Configure FamilySearch API credentials with clientId: YOUR_CLIENT_ID_HERE
-```
-
-Then authenticate with your FamilySearch username and password:
-
-```
-Authenticate with FamilySearch using username: your_username and password: your_password
-```
-
-Once authenticated, your credentials will be stored securely in `~/.familysearch-mcp/config.json` for future use.
-
-## Available MCP Tools
-
-### Basic
-
-- `say-hello`: A simple greeting function
-- `configure`: Set up your FamilySearch API credentials
-- `authenticate`: Log in to FamilySearch
-- `get-current-user`: View details about your FamilySearch account
-
-### Family Tree
-
-- `search-persons`: Search for individuals in FamilySearch Family Tree
-- `get-person`: View detailed information about a specific person
-- `get-ancestors`: View a person's ancestors (up to 8 generations)
-- `get-descendants`: View a person's descendants (up to 3 generations)
-
-### Historical Records
-
-- `search-records`: Search FamilySearch's historical record collections
-
-## Example Queries
-
-```
-Search for persons with name: "John Smith" birthPlace: "New York"
+```json
+{
+  "mcpServers": {
+    "familysearch": {
+      "command": "node",
+      "args": [
+        "C:\\absolute\\path\\to\\familysearch-mcp\\build\\index.js"
+      ]
+    }
+  }
+}
 ```
 
-```
-Get person with personId: ABCD-123
+## First login
+
+Use the MCP tools in this order:
+
+1. `configure`
+
+   ```json
+   {
+     "clientId": "YOUR_FAMILYSEARCH_APP_KEY",
+     "environment": "beta",
+     "redirectUri": "http://127.0.0.1:57938/familysearch-auth"
+   }
+   ```
+
+2. `begin-auth`
+3. Open the returned `familysearch.org` URL in your browser.
+4. Verify the domain in the browser, log in directly to FamilySearch, and
+   approve access.
+5. Call `auth-status`.
+
+The access token exists only in server memory. Restarting the MCP server requires
+another browser login.
+
+## Tools
+
+### Session
+
+- `configure` — save the non-secret app configuration
+- `begin-auth` — start browser OAuth with PKCE
+- `auth-status` — check the in-memory session
+- `logout` — invalidate and clear the active token
+- `get-current-user` — read a minimal profile without returning email
+
+### Read-only genealogy
+
+- `search-persons` — search by given name, surname, dates, places, or gender
+- `get-person` — read a person by FamilySearch ID
+- `get-ancestors` — read up to eight ancestor generations
+- `get-descendants` — read up to three descendant generations
+
+The original `search-records` tool was removed. The old endpoint was not present
+in the current public API reference, and FamilySearch places legal and
+certification restrictions on displaying Historical Records data through
+third-party applications. Use FamilySearch's website for unrestricted record
+research unless FamilySearch explicitly approves your application for that API.
+
+## Living people
+
+Living-person data is redacted by default, even when the authenticated account
+can see it. This prevents private-tree data from automatically entering an AI
+conversation.
+
+An informed local user can opt in before starting the MCP server:
+
+```powershell
+$env:FAMILYSEARCH_INCLUDE_LIVING = "true"
+npm start
 ```
 
-```
-Get ancestors for personId: ABCD-123 with generations: 4
+Do not enable this for a hosted model or shared task unless every affected living
+person has consented and you accept the model provider's retention terms.
+
+## Configuration file
+
+The server writes:
+
+```text
+~/.familysearch-mcp/config.json
 ```
 
-```
-Search records with surname: "Johnson" birthPlace: "England" deathDate: "1880-01-01"
+The file contains only:
+
+```json
+{
+  "clientId": "...",
+  "redirectUri": "http://127.0.0.1:57938/familysearch-auth",
+  "environment": "beta"
+}
 ```
 
-## Security Notice
+If an old config contains `username`, `password`, `accessToken`,
+`refreshToken`, or `clientSecret`, the server strips those fields when loading
+it.
 
-Your FamilySearch credentials are stored locally on your machine in `~/.familysearch-mcp/config.json`. Never share this file with others.
+## Development
+
+```powershell
+npm ci
+npm run check
+npm audit --omit=dev
+```
+
+The test suite covers OAuth URL construction, PKCE, redirect validation,
+legacy-secret removal, authorization headers, input encoding, privacy
+redaction, and cycle handling.
 
 ## License
 
-ISC 
+ISC
