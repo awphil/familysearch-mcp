@@ -2,60 +2,46 @@
 
 Dear FamilySearch Developer Support Team,
 
-## Introduction
+I am requesting a FamilySearch API app key for a personal, non-commercial,
+local genealogy research tool.
 
-I'm writing to request access to the FamilySearch API for a personal project that explores innovative ways to interact with family history data. As someone passionate about both genealogy and emerging technologies, I'm excited about the potential intersection between these fields.
+The application is a Model Context Protocol (MCP) server that lets a user ask a
+local AI client to perform a small set of read-only FamilySearch operations:
 
-## Project Overview: Model Context Protocol Integration
+- Read a minimal current-user profile
+- Search Family Tree persons
+- Read one Family Tree person
+- Read bounded ancestry and descendancy results
 
-I'm developing a Model Context Protocol (MCP) server that would enable AI assistants like Claude and Cursor to interact directly with FamilySearch data in a controlled, secure manner. MCP is an emerging standard that allows AI tools to access specific external services through defined interfaces rather than through screen scraping or other less secure methods.
+## Authentication and security
 
-### What is MCP?
+The application uses OAuth 2.0 Authorization Code flow with PKCE. Users sign in
+only on the FamilySearch authorization page; the application never asks for or
+stores a FamilySearch username or password.
 
-Model Context Protocol is a framework developed by Anthropic (creators of Claude AI) that allows AI systems to:
+The requested callback URI is:
 
-1. Access specific external tools and data sources through a defined API
-2. Take actions in the real world through controlled, auditable interfaces
-3. Provide users with reliable, up-to-date information from trusted sources
+```text
+http://127.0.0.1:57938/familysearch-auth
+```
 
-Rather than having AI tools attempt to navigate web interfaces or parse HTML, MCP provides a structured way for AIs to access specific functionality that developers define.
+The listener binds only to the loopback interface, validates a random `state`
+value, uses an S256 PKCE challenge, and closes after authentication or a
+five-minute timeout.
 
-## Potential Benefits for Family History Research
+Access tokens remain in process memory and are not persisted. The application
+does not request or store refresh tokens. On-disk configuration contains only
+the app key, callback URI, and selected FamilySearch environment.
 
-This integration would enable several innovative use cases:
+All genealogy tools are read-only. Living people are redacted by default before
+data is returned to the AI client. Historical Records data is not displayed.
 
-- **Natural language genealogy queries**: Users could ask questions like "Who were my 3rd great-grandparents on my mother's side?" and get accurate information directly from FamilySearch.
-- **Research assistance**: AI could help identify research gaps, suggest records to check, or highlight inconsistencies in family data.
-- **Family storytelling**: Generate narratives about ancestors based on factual data from FamilySearch records.
-- **Guided discovery**: Help newcomers to genealogy navigate FamilySearch's rich resources through conversational AI.
-
-## Request Details
-
-I'm requesting API access for personal, non-commercial experimentation only at this stage. My implementation would:
-
-- Require users to authenticate with their own FamilySearch credentials
-- Respect all API rate limits and usage guidelines
-- Only access data the authenticated user has permission to view
-- Maintain the security and privacy of user data
-
-Should the prototype show promise, I would be happy to discuss potential broader applications or formal partnership opportunities.
-
-## Technical Implementation
-
-The MCP server would be built using Node.js and would implement a limited set of FamilySearch API endpoints focused on:
-- Authentication
-- Person/family tree access
-- Record searching
-- Source attachment
-
-## Conclusion
-
-I believe this project represents an innovative approach to family history that aligns with FamilySearch's mission of connecting families across generations. By combining AI's conversational capabilities with FamilySearch's authoritative data, we can create more accessible and engaging family history experiences.
-
-Thank you for considering my request. I'm happy to provide any additional information or discuss the project further.
+I will respect FamilySearch rate limits, compatibility requirements, privacy
+requirements, and API terms. I am happy to provide source code or additional
+technical details for review.
 
 Sincerely,
 
 [Your Name]
 [Your Email]
-[Your Phone Number] 
+[Your Phone Number]
